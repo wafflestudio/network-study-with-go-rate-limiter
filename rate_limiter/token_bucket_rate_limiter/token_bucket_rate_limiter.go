@@ -11,9 +11,10 @@ import (
 
 type TokenBucketRateLimiter struct {
 	// Configs
-	RefillInterval time.Duration
-	RefillTokens   int
-	Capacity       int
+	RefillInterval   time.Duration
+	RefillTokens     int
+	IsRefillInterval bool
+	Capacity         int
 
 	// Configs not open
 	logger  *log.Logger
@@ -24,36 +25,72 @@ type TokenBucketRateLimiter struct {
 	buckets     map[string]*bucket
 }
 
-// NewTokenBucketRateLimiter If keyFunc is nil, use remote address as key
-func NewTokenBucketRateLimiter(
-	refillInterval time.Duration,
-	refillTokens int,
-	capacity int,
-	keyFunc func(r *http.Request) string,
-	logger *log.Logger,
-) (*TokenBucketRateLimiter, error) {
-	if capacity <= 0 {
+type Builder struct {
+	// Configs
+	refillInterval   time.Duration
+	refillTokens     int
+	isRefillInterval bool
+	capacity         int
+
+	// Configs not open
+	logger  *log.Logger
+	keyFunc func(r *http.Request) string
+}
+
+func (b *Builder) RefillGreedy(refillInterval time.Duration, refillTokens int) *Builder {
+	b.refillInterval = refillInterval
+	b.refillTokens = refillTokens
+	b.isRefillInterval = false
+	return b
+}
+
+func (b *Builder) RefillInterval(refillInterval time.Duration, refillTokens int) *Builder {
+	b.refillInterval = refillInterval
+	b.refillTokens = refillTokens
+	b.isRefillInterval = true
+	return b
+}
+
+func (b *Builder) SetKeyFunc(keyFunc func(r *http.Request) string) *Builder {
+	b.keyFunc = keyFunc
+	return b
+}
+
+func (b *Builder) Build() (*TokenBucketRateLimiter, error) {
+	if b.capacity <= 0 {
 		return nil, errors.New("capacity should be greater than 0")
 	}
-
-	if refillTokens <= 0 {
+	if b.refillTokens <= 0 {
 		return nil, errors.New("refill tokens should be greater than 0")
 	}
-
-	if keyFunc == nil {
-		keyFunc = func(r *http.Request) string {
-			return r.RemoteAddr
-		}
-	}
-
 	return &TokenBucketRateLimiter{
-		RefillInterval: refillInterval,
-		RefillTokens:   refillTokens,
-		Capacity:       capacity,
-		logger:         logger,
-		keyFunc:        keyFunc,
-		buckets:        map[string]*bucket{},
+		RefillInterval:   b.refillInterval,
+		RefillTokens:     b.refillTokens,
+		IsRefillInterval: b.isRefillInterval,
+		Capacity:         b.capacity,
+		logger:           b.logger,
+		keyFunc:          b.keyFunc,
+		bucketsLock:      sync.Mutex{},
+		buckets:          make(map[string]*bucket),
 	}, nil
+}
+
+// NewTokenBucketRateLimiter If keyFunc is nil, use remote address as key
+func NewTokenBucketRateLimiterBuilder(
+	capacity int,
+	logger *log.Logger,
+) *Builder {
+	keyFunc := func(r *http.Request) string {
+		return r.RemoteAddr
+	}
+	return &Builder{
+		refillInterval:   time.Minute,
+		refillTokens:     100,
+		isRefillInterval: false,
+		capacity:         capacity,
+		logger:           logger,
+		keyFunc:          keyFunc,
+	}
 }
 
 // Take implements RateLimiter.
@@ -83,9 +120,10 @@ func (s *TokenBucketRateLimiter) getBucket(key string) *bucket {
 				lastRefillTime: time.Now(),
 				tokens:         s.Capacity,
 				ctx: &Context{
-					refillInterval: s.RefillInterval,
-					refillTokens:   s.RefillTokens,
-					capacity:       s.Capacity,
+					refillInterval:   s.RefillInterval,
+					refillTokens:     s.RefillTokens,
+					isRefillInterval: s.IsRefillInterval,
+					capacity:         s.Capacity,
 				},
 			},
 		}
@@ -117,9 +155,10 @@ type State struct {
 }
 
 type Context struct {
-	refillInterval time.Duration
-	refillTokens   int
-	capacity       int
+	refillInterval   time.Duration
+	refillTokens     int
+	isRefillInterval bool
+	capacity         int
 }
 
 func (s *State) Refill(currentTime time.Time) {
@@ -138,14 +177,18 @@ func (s *State) Refill(currentTime time.Time) {
 	}
 
 	duration := currentTime.Sub(l)
-	refillCount := int(duration.Nanoseconds() / refillInterval.Nanoseconds())
-	if refillCount == 0 {
-		return
+	elapsedFraction := float64(duration) / float64(refillInterval)
+	refill := 0
+	if s.ctx.isRefillInterval { // when interval
+		refill = int(elapsedFraction) * refillTokens
+	} else { // when greedy
+		refill = int(elapsedFraction * float64(refillTokens))
 	}
-	t += refillCount * refillTokens
 
-	s.tokens = min(capacity, t)
-	s.lastRefillTime = currentTime
+	s.tokens = min(capacity, t+refill)
+	if t < s.tokens {
+		s.lastRefillTime = currentTime
+	}
 }
 
 func (s *State) Consume(tokens int) bool {
