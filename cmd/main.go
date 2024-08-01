@@ -15,9 +15,7 @@ import (
 	"github.com/wafflestudio/network-study-with-go-rate-limiter/middleware/logger_middleware"
 )
 
-var (
-	addr                = flag.String("addr", "localhost:8080", "define address of server")
-)
+var addr = flag.String("addr", "localhost:8080", "define address of server")
 
 func main() {
 	// Logger middleware
@@ -25,7 +23,7 @@ func main() {
 	l.SetFlags(log.Ltime | log.Lmicroseconds)
 	logMiddleware := logger_middleware.NewLoggerMiddleware(l)
 
-    // TODO: Add rate limiter
+	// TODO: Add rate limiter
 	// rateLimitMiddleware := middleware.NewRateLimitMiddleware(rateLimiter)
 
 	// Multiplexer handler
