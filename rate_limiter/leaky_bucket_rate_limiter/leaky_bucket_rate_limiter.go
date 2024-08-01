@@ -3,6 +3,7 @@ package rate_limiter
 import (
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -21,8 +22,8 @@ type LeakyBucket struct {
 	logger  *log.Logger
 
 	// Internal Structures
-	queueLock sync.Mutex
-	queues    map[string]chan request
+	queues map[string]chan request
+	mu     sync.Mutex
 }
 
 type request struct {
@@ -32,6 +33,10 @@ type request struct {
 func NewLeakyBucket(capacity int, period time.Duration, keyFunc func(r *http.Request) string, logger *log.Logger) (*LeakyBucket, error) {
 	if keyFunc == nil {
 		keyFunc = defaultKeyFunc
+	}
+
+	if logger == nil {
+		logger = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	}
 
 	bucket := &LeakyBucket{
@@ -58,7 +63,7 @@ func (lb *LeakyBucket) Key(r *http.Request) string {
 
 // Take implements rate_limiter.RateLimiter.
 func (lb *LeakyBucket) Take(key string) (accepted bool) {
-	queue := lb.getQueue(key)
+	queue := lb.getOrCreateQueue(key)
 	req := request{make(chan struct{})}
 
 	select {
@@ -73,12 +78,13 @@ func (lb *LeakyBucket) Take(key string) (accepted bool) {
 
 func (lb *LeakyBucket) startLeaking() {
 
-	ticker := time.NewTicker(lb.period / time.Duration(lb.capacity))
+	rate := lb.period / time.Duration(lb.capacity)
+	lb.logger.Printf("leaking rate: %s\n", rate)
+
+	ticker := time.NewTicker(rate)
 	defer ticker.Stop()
 
-	// queue 자체가 map에 새로 생성될 수 있음 (?)
-	lb.queueLock.Lock()
-	defer lb.queueLock.Unlock()
+	// queue 자체가 map에 새로 생성될 수 있음
 	for range ticker.C {
 		for key, queue := range lb.queues {
 			select {
@@ -92,15 +98,14 @@ func (lb *LeakyBucket) startLeaking() {
 	}
 }
 
-func (lb *LeakyBucket) getQueue(key string) chan request {
-	if q, found := lb.queues[key]; found {
+func (lb *LeakyBucket) getOrCreateQueue(key string) chan request {
+	q, found := lb.queues[key]
+	if found {
 		return q
 	}
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
 	// key에 대응하는 queue가 없다면 새로 만들어줘야 함
-	lb.queueLock.Lock()
-	defer lb.queueLock.Unlock()
-
-	q, found := lb.queues[key]
 	if !found {
 		q = make(chan request, lb.capacity)
 		lb.queues[key] = q
