@@ -16,6 +16,7 @@ import (
 	"github.com/wafflestudio/network-study-with-go-rate-limiter/middleware/logger_rate_limiter_middleware"
 	"github.com/wafflestudio/network-study-with-go-rate-limiter/middleware/rate_limiter_middleware"
 	rate_limiter "github.com/wafflestudio/network-study-with-go-rate-limiter/rate_limiter/leaky_bucket_rate_limiter"
+	"github.com/wafflestudio/network-study-with-go-rate-limiter/rate_limiter/sliding_window_counter_rate_limiter"
 )
 
 var (
@@ -29,23 +30,37 @@ func main() {
 	logMiddleware := logger_middleware.NewLoggerMiddleware(l)
 
 	// 별도의 로거 설정
+	// tokenBucketLogger := createFileLogger("token_bucket.log")
 	leakyBucketLogger := createFileLogger("leaky_bucket.log")
 	leakyBucket2Logger := createFileLogger("leaky_bucket2.log")
+	slidingWindowCounterLogger := createFileLogger("sliding_window_counter.log")
 
 	// TODO: Add rate limiter
-	leakyBucketRateLimiter, err := rate_limiter.NewLeakyBucket(1, 10*time.Second, uriBasedKeyFunc, nil)
+	// tokenBucketRateLimiter, err :=
+	// rate_limiter.NewTokenBucketRateLimiterBuilder(5, nil)
+
+	// .RefillGreedy(5, 10*time.Second, uriBasedKeyFunc, nil)
+	// if err != nil {
+	// 	log.Fatal("Invalid token bucket rate limiter")
+	// }
+
+	leakyBucketRateLimiter, err := rate_limiter.NewLeakyBucket(5, 10*time.Second, uriBasedKeyFunc, nil)
 	if err != nil {
 		log.Fatal("Invalid leaky bucket rate limiter")
 	}
 
 	leakyBucketRateLimiterMiddleware := rate_limiter_middleware.NewRateLimitMiddleware(leakyBucketRateLimiter)
 
-	leakyBucket2RateLimiter, err := rate_limiter.NewLeakyBucket2(1, 10*time.Second, uriBasedKeyFunc, nil)
+	leakyBucket2RateLimiter, err := rate_limiter.NewLeakyBucket2(5, 10*time.Second, uriBasedKeyFunc, nil)
 	if err != nil {
 		log.Fatal("Invalid leaky bucket2 rate limiter")
 	}
 
 	leakyBucket2RateLimiterMiddleware := rate_limiter_middleware.NewRateLimitMiddleware(leakyBucket2RateLimiter)
+
+	slidingWindowCounterRateLimiter, err := sliding_window_counter_rate_limiter.NewSlidingWindowCounter(3, 2, 5, uriBasedKeyFunc, nil)
+
+	slidingWindowCounterRateLimiterMiddleware := rate_limiter_middleware.NewRateLimitMiddleware(slidingWindowCounterRateLimiter)
 
 	leakyBucketLogging := &logger_rate_limiter_middleware.LoggerRateLimiterMiddleware{
 		RateLimiterType: "LeakyBucket",
@@ -55,6 +70,11 @@ func main() {
 	leakyBucket2Logging := &logger_rate_limiter_middleware.LoggerRateLimiterMiddleware{
 		RateLimiterType: "LeakyBucket2",
 		Logger:          leakyBucket2Logger,
+	}
+
+	slidingWindowCounterLogging := &logger_rate_limiter_middleware.LoggerRateLimiterMiddleware{
+		RateLimiterType: "SlidingWindowCounter",
+		Logger:          slidingWindowCounterLogger,
 	}
 
 	leakyBucketHandler := handler.NewStackHandler(
@@ -71,19 +91,18 @@ func main() {
 		}),
 	)
 
+	slidingWindowCouterHandler := handler.NewStackHandler(
+		[]middleware.Middleware{slidingWindowCounterLogging, slidingWindowCounterRateLimiterMiddleware},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("Sliding Window Counter rate limiter response"))
+		}),
+	)
+
 	// Multiplexer handler
 	mux := http.NewServeMux()
-	mux.Handle("/leaky_bucket", leakyBucketHandler)
-	mux.Handle("/leaky_bucket2", leakyBucket2Handler)
-
-	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
-	mux.HandleFunc("/tang", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("huru"))
-	})
+	mux.Handle("/leaky-bucket/", leakyBucketHandler)
+	mux.Handle("/leaky-bucket2/", leakyBucket2Handler)
+	mux.Handle("/sliding-window-counter/", slidingWindowCouterHandler)
 
 	// Stacked Handler
 	handler := handler.NewStackHandler(
