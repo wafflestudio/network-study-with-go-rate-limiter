@@ -41,12 +41,17 @@ func main() {
 	l.SetFlags(log.Ltime | log.Lmicroseconds)
 	logMiddleware := logger_middleware.NewLoggerMiddleware(l)
 
+	leakyBucketFileLogger := createFileLogger("logs", "leaky_bucket.log")
+	leakyBucket2FileLogger := createFileLogger("logs", "leaky_bucket2.log")
+	tokenBucketFileLogger := createFileLogger("logs", "token_bucket.log")
+	slidingWindowCounterFileLogger := createFileLogger("logs", "sliding_window_counter.log")
+
 	rateLimiterConfigs := []RateLimiterConfig{
 		{
 			name: "TokenBucket",
 			path: "token-bucket",
 			builder: func() (rate_limiter.RateLimiter, error) {
-				return token_bucket_rate_limiter.NewTokenBucketRateLimiterBuilder(10, nil).RefillGreedy(10*time.Second, 10).Build()
+				return token_bucket_rate_limiter.NewTokenBucketRateLimiterBuilder(10, tokenBucketFileLogger).RefillGreedy(10*time.Second, 10).SetKeyFunc(uriBasedKeyFunc).Build()
 			},
 			logFile:  "token_bucket.log",
 			response: "Token Bucket rate limiter response",
@@ -55,7 +60,7 @@ func main() {
 			name: "LeakyBucket",
 			path: "leaky-bucket",
 			builder: func() (rate_limiter.RateLimiter, error) {
-				return leaky_bucket_rate_limiter.NewLeakyBucket(5, 10*time.Second, uriBasedKeyFunc, nil)
+				return leaky_bucket_rate_limiter.NewLeakyBucket(5, 10*time.Second, uriBasedKeyFunc, leakyBucketFileLogger)
 			},
 			logFile:  "leaky_bucket.log",
 			response: "Leaky Bucket rate limiter response",
@@ -64,7 +69,7 @@ func main() {
 			name: "LeakyBucket2",
 			path: "leaky-bucket2",
 			builder: func() (rate_limiter.RateLimiter, error) {
-				return leaky_bucket2_rate_limiter.NewLeakyBucket2(5, 10*time.Second, uriBasedKeyFunc, nil)
+				return leaky_bucket2_rate_limiter.NewLeakyBucket2(5, 10*time.Second, uriBasedKeyFunc, leakyBucket2FileLogger)
 			},
 			logFile:  "leaky_bucket2.log",
 			response: "Leaky Bucket2 rate limiter response",
@@ -73,7 +78,7 @@ func main() {
 			name: "SlidingWindowCounter",
 			path: "sliding-window-counter",
 			builder: func() (rate_limiter.RateLimiter, error) {
-				return sliding_window_counter_rate_limiter.NewSlidingWindowCounter(3, 2, 5, uriBasedKeyFunc, nil)
+				return sliding_window_counter_rate_limiter.NewSlidingWindowCounter(3, 2, 5, uriBasedKeyFunc, slidingWindowCounterFileLogger)
 			},
 			logFile:  "sliding_window_counter.log",
 			response: "Sliding Window Counter rate limiter response",
@@ -87,7 +92,7 @@ func main() {
 			log.Fatalf("Invalid %s rate limiter: %v", config.name, err)
 		}
 		rateLimiterMiddleware := rate_limiter_middleware.NewRateLimitMiddleware(rateLimiter)
-		rateLimiterLogger := createFileLogger("logs", config.logFile)
+		rateLimiterLogger := createFileLogger("middleware_logs", config.logFile)
 		rateLimiterLogging := &logger_rate_limiter_middleware.LoggerRateLimiterMiddleware{
 			RateLimiterType: config.name,
 			Logger:          rateLimiterLogger,
