@@ -1,8 +1,7 @@
-package rate_limiter
+package token_bucket_rate_limiter
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -125,6 +124,8 @@ func (s *TokenBucketRateLimiter) getBucket(key string) *bucket {
 					isRefillInterval: s.IsRefillInterval,
 					capacity:         s.Capacity,
 				},
+				logger: s.logger,
+				key:    key,
 			},
 		}
 		s.buckets[key] = b
@@ -152,6 +153,10 @@ type State struct {
 	lastRefillTime time.Time
 	tokens         int
 	ctx            *Context
+
+	// for Logging
+	logger *log.Logger
+	key    string
 }
 
 type Context struct {
@@ -192,7 +197,7 @@ func (s *State) Refill(currentTime time.Time) {
 }
 
 func (s *State) Consume(tokens int) bool {
-	fmt.Printf("try Consume: current tokens=%v, tokens to conusme=%v\n", s.tokens, tokens)
+	s.logger.Printf("key: %s, try Consume: current tokens=%v, tokens to conusme=%v\n", s.key, s.tokens, tokens)
 	if tokens > s.tokens {
 		return false
 	}

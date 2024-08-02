@@ -1,4 +1,4 @@
-package rate_limiter
+package leaky_bucket_rate_limiter
 
 import (
 	"log"
@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wafflestudio/network-study-with-go-rate-limiter/rate_limiter"
+	rl "github.com/wafflestudio/network-study-with-go-rate-limiter/rate_limiter"
 )
 
-var _ rate_limiter.RateLimiter = (*LeakyBucket)(nil)
+var _ rl.RateLimiter = (*LeakyBucket)(nil)
 
 type LeakyBucket struct {
 	// Configs

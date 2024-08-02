@@ -19,6 +19,7 @@ func (rm *RateLimitMiddleware) ServeNext(next http.Handler) http.Handler {
 		if rm.Take(rm.Key(r)) {
 			next.ServeHTTP(w, r)
 		} else {
+			w.Header().Set("X-RateLimit-Exceeded", "true")
 			w.WriteHeader(http.StatusTooManyRequests)
 			w.Write([]byte("Rate limit exceeded"))
 		}
