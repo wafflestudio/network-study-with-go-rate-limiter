@@ -1,4 +1,4 @@
-package rate_limiter
+package token_bucket_rate_limiter
 
 import (
 	"errors"
