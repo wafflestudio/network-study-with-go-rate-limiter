@@ -1,4 +1,4 @@
-package rate_limiter
+package leaky_bucket2_rate_limiter
 
 import (
 	"log"
@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wafflestudio/network-study-with-go-rate-limiter/rate_limiter"
+	rl "github.com/wafflestudio/network-study-with-go-rate-limiter/rate_limiter"
 )
 
-var _ rate_limiter.RateLimiter = (*LeakyBucket2)(nil)
+var _ rl.RateLimiter = (*LeakyBucket2)(nil)
 
 type LeakyBucket2 struct {
 	// Configs
@@ -52,6 +52,10 @@ func NewLeakyBucket2(capacity int, period time.Duration, keyFunc func(r *http.Re
 	}
 
 	return bucket, nil
+}
+
+func defaultKeyFunc(r *http.Request) string {
+	return r.RemoteAddr
 }
 
 // Key implements rate_limiter.RateLimiter.
