@@ -162,8 +162,9 @@ type record struct {
 }
 
 func newRecord(now time.Time, interval time.Duration) *record {
+	endsAt := now.Truncate(interval).Add(interval)
 	return &record{
-		endsAt: now.Truncate(interval).Add(interval),
+		endsAt: endsAt,
 		count:  0,
 	}
 }
@@ -171,8 +172,9 @@ func newRecord(now time.Time, interval time.Duration) *record {
 func (r *record) String() string {
 	sb := new(strings.Builder)
 	sb.WriteString("{\n")
-	sb.WriteString(fmt.Sprintf("\tendsAt: %s\n", r.endsAt))
-	sb.WriteString(fmt.Sprintf("\tcount: %d\n", r.count))
+	// sb.WriteString(fmt.Sprintf("\tendsAt: %s\n", r.endsAt))
+	// sb.WriteString(fmt.Sprintf("\tcount: %d\n", r.count))
+	sb.WriteString(fmt.Sprintf("\t%d, endsAt: %s\n", r.count, r.endsAt.Format("15:04:05.000")))
 	sb.WriteString("}")
 	return sb.String()
 }

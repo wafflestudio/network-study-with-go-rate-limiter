@@ -89,7 +89,7 @@ func main() {
 			name: "SlidingWindowCounter",
 			path: "sliding-window-counter",
 			builder: func() (rate_limiter.RateLimiter, error) {
-				return sliding_window_counter_rate_limiter.NewSlidingWindowCounter(3, 2, 5, uriBasedKeyFunc, slidingWindowCounterFileLogger)
+				return sliding_window_counter_rate_limiter.NewSlidingWindowCounter(5*time.Second, 2*time.Second, 5, uriBasedKeyFunc, slidingWindowCounterFileLogger)
 			},
 			logFile:  "sliding_window_counter.log",
 			response: "[Success] Sliding Window Counter rate limiter response",

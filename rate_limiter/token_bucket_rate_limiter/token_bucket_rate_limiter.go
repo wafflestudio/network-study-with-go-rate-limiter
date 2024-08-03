@@ -198,6 +198,7 @@ func (s *State) Refill(currentTime time.Time) {
 }
 
 func (s *State) Consume(tokens int) bool {
+	fmt.Printf("try Consume: current tokens=%v, tokens to conusme=%v\n", s.tokens, tokens)
 	if tokens > s.tokens {
 		s.logger.Printf("[fail] key: %s, request rejected\n", s.key)
 		return false
