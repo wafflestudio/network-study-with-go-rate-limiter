@@ -43,18 +43,29 @@ func main() {
 
 	leakyBucketFileLogger := createFileLogger("logs", "leaky_bucket.log")
 	leakyBucket2FileLogger := createFileLogger("logs", "leaky_bucket2.log")
-	tokenBucketFileLogger := createFileLogger("logs", "token_bucket.log")
+	tokenBucketGreedyFileLogger := createFileLogger("logs", "token_bucket_greedy.log")
+	tokenBucketIntervalFileLogger := createFileLogger("logs", "token_bucket_interval.log")
+
 	slidingWindowCounterFileLogger := createFileLogger("logs", "sliding_window_counter.log")
 
 	rateLimiterConfigs := []RateLimiterConfig{
 		{
-			name: "TokenBucket",
-			path: "token-bucket",
+			name: "TokenBucket Greedy",
+			path: "token-bucket-greedy",
 			builder: func() (rate_limiter.RateLimiter, error) {
-				return token_bucket_rate_limiter.NewTokenBucketRateLimiterBuilder(10, tokenBucketFileLogger).RefillGreedy(10*time.Second, 10).SetKeyFunc(uriBasedKeyFunc).Build()
+				return token_bucket_rate_limiter.NewTokenBucketRateLimiterBuilder(10, tokenBucketGreedyFileLogger).RefillGreedy(10*time.Second, 10).SetKeyFunc(uriBasedKeyFunc).Build()
 			},
-			logFile:  "token_bucket.log",
-			response: "Token Bucket rate limiter response",
+			logFile:  "token_bucket_greedy.log",
+			response: "[Success] Token Bucket Greedy rate limiter response",
+		},
+		{
+			name: "TokenBucket Interval",
+			path: "token-bucket-interval",
+			builder: func() (rate_limiter.RateLimiter, error) {
+				return token_bucket_rate_limiter.NewTokenBucketRateLimiterBuilder(10, tokenBucketIntervalFileLogger).RefillInterval(10*time.Second, 10).SetKeyFunc(uriBasedKeyFunc).Build()
+			},
+			logFile:  "token_bucket_interval.log",
+			response: "[Success] Token Bucket Interval rate limiter response",
 		},
 		{
 			name: "LeakyBucket",
@@ -63,7 +74,7 @@ func main() {
 				return leaky_bucket_rate_limiter.NewLeakyBucket(5, 10*time.Second, uriBasedKeyFunc, leakyBucketFileLogger)
 			},
 			logFile:  "leaky_bucket.log",
-			response: "Leaky Bucket rate limiter response",
+			response: "[Success] Leaky Bucket rate limiter response",
 		},
 		{
 			name: "LeakyBucket2",
@@ -72,7 +83,7 @@ func main() {
 				return leaky_bucket2_rate_limiter.NewLeakyBucket2(5, 10*time.Second, uriBasedKeyFunc, leakyBucket2FileLogger)
 			},
 			logFile:  "leaky_bucket2.log",
-			response: "Leaky Bucket2 rate limiter response",
+			response: "[Success] Leaky Bucket2 rate limiter response",
 		},
 		{
 			name: "SlidingWindowCounter",
@@ -81,7 +92,7 @@ func main() {
 				return sliding_window_counter_rate_limiter.NewSlidingWindowCounter(3, 2, 5, uriBasedKeyFunc, slidingWindowCounterFileLogger)
 			},
 			logFile:  "sliding_window_counter.log",
-			response: "Sliding Window Counter rate limiter response",
+			response: "[Success] Sliding Window Counter rate limiter response",
 		},
 	}
 	mux := http.NewServeMux()

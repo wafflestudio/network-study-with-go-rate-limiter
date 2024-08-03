@@ -192,15 +192,17 @@ func (s *State) Refill(currentTime time.Time) {
 
 	s.tokens = min(capacity, t+refill)
 	if t < s.tokens {
+		s.logger.Printf("================[refill %v tokens] last refill duration=%s================\n", s.tokens-t, duration)
 		s.lastRefillTime = currentTime
 	}
 }
 
 func (s *State) Consume(tokens int) bool {
-	s.logger.Printf("key: %s, try Consume: current tokens=%v, tokens to conusme=%v\n", s.key, s.tokens, tokens)
 	if tokens > s.tokens {
+		s.logger.Printf("[fail] key: %s, request rejected\n", s.key)
 		return false
 	}
+	s.logger.Printf("[success] key: %s, try Consume: current=%v, conusme=%v\n", s.key, s.tokens, tokens)
 	s.tokens = max(0, s.tokens-tokens)
 	return true
 }
